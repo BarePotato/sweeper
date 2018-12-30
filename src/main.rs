@@ -6,10 +6,6 @@ use sfml::graphics::{
 use sfml::system::Vector2f;
 use sfml::window::{mouse, Event, Style};
 
-const DEF_GRID: (u32, u32) = (10, 10); // grid squares
-const DEF_GRID_SQ: u32 = 60; // pixels per grid square
-const DEF_FONT_SIZE: u32 = DEF_GRID_SQ / 2;
-const DEF_MARGIN: u32 = 8; // pixels around edge of window
 const DEF_CTRL_CANVAS: u32 = 128; // pixels on edge of x for buttons and stuff
 
 const neighbors: &[Point] = &[
@@ -54,126 +50,198 @@ impl Cell {
     }
 }
 
+struct Game {
+    grid: Vec<Vec<Cell>>,
+    grid_width: usize,
+    grid_height: usize,
+    grid_square: usize,
+    first_click: bool,
+    game_over: bool,
+    game_won: bool,
+}
+
+impl Game {
+    fn new() -> Game {
+        let grid_width = 10;
+        let grid_height = 10;
+
+        Game {
+            grid: vec![vec![Cell::new(); grid_width]; grid_height],
+            grid_width,
+            grid_height,
+            grid_square: 60,
+            first_click: true,
+            game_over: false,
+            game_won: false,
+        }
+    }
+}
+
+struct UI {
+    window: RenderWindow,
+    margin: usize,
+    font: Font,
+    font_size: u32,
+    control_surface_width: usize,
+    control_surface_left: u32,
+}
+
+impl UI {
+    fn new(game: &Game) -> UI {
+        let margin = 8;
+        let font_size = (game.grid_square / 2) as u32;
+        let control_surface_width = 128;
+        let ui_width =
+            (game.grid_square * game.grid_width + (margin * 2) + control_surface_width) as u32;
+        let ui_height = (game.grid_square * game.grid_height + (margin * 2)) as u32;
+        let control_surface_left = ui_width - control_surface_width as u32;
+
+        UI {
+            window: RenderWindow::new(
+                (ui_width, ui_height),
+                "Potato Sweeper!",
+                Style::CLOSE,
+                &Default::default(),
+            ),
+            margin,
+            font: Font::from_file("courbd.ttf").unwrap(),
+            font_size,
+            control_surface_width,
+            control_surface_left,
+        }
+    }
+}
+
 fn main() {
     //// Game stuffs
-    let mut first_click = true;
+    let mut game = Game::new();
+    //// Basic Window and UI stuff
+    let mut ui = UI::new(&game);
+
+    //// UI related something or other
     let mut click_grid = Point { x: -1, y: -1 };
 
-    //// Basic Window and UI stuff
-    let grid_w = DEF_GRID.0 * DEF_GRID_SQ;
-    let grid_h = DEF_GRID.1 * DEF_GRID_SQ;
-    let win_x = &grid_w + (DEF_MARGIN * 2) + DEF_CTRL_CANVAS;
-    let win_y = &grid_h + (DEF_MARGIN * 2);
-    let ctrl_canvas_left = win_x - 128;
     let grid_point = Point {
-        x: DEF_GRID.0 as i8,
-        y: DEF_GRID.1 as i8,
+        x: game.grid_square as i8,
+        y: game.grid_square as i8,
     };
 
-    //// Our window
-    let mut window = RenderWindow::new(
-        (win_x, win_y),
-        "Potato Sweeper!",
-        Style::CLOSE,
-        &Default::default(),
-    );
-
     //// UI Font
-    let ui_font = Font::from_file("courbd.ttf").unwrap();
-    let mut my_text = Text::new("", &ui_font, 20);
+    let mut my_text = Text::new("", &ui.font, ui.font_size / 2);
 
     //// Playfield BG
-    let mut my_rect = RectangleShape::with_size((grid_w as f32, grid_h as f32).into());
-    my_rect.set_position((DEF_MARGIN as f32, DEF_MARGIN as f32));
+    let mut my_rect = RectangleShape::with_size(
+        (
+            (game.grid_square * game.grid_width) as f32,
+            (game.grid_square * game.grid_height) as f32,
+        )
+            .into(),
+    );
+    my_rect.set_position((ui.margin as f32, ui.margin as f32));
     my_rect.set_fill_color(&Color::rgb(28, 36, 43));
 
     //// Control surface and Controls
     // line dividing gameplay area from controls
     let ctrl_canvas_edge = [
         Vertex::with_pos_color(
-            Vector2f::new(ctrl_canvas_left as f32, 0.),
+            Vector2f::new(ui.control_surface_left as f32, 0.),
             Color::rgb(5, 11, 16),
         ),
         Vertex::with_pos_color(
-            Vector2f::new(ctrl_canvas_left as f32, win_y as f32),
+            Vector2f::new(ui.control_surface_left as f32, ui.window.size().y as f32),
             Color::rgb(5, 11, 16),
         ),
         Vertex::with_pos_color(
-            Vector2f::new((ctrl_canvas_left + 1) as f32, win_y as f32),
+            Vector2f::new(
+                (ui.control_surface_left + 1) as f32,
+                ui.window.size().y as f32,
+            ),
             Color::rgb(64, 71, 78),
         ),
         Vertex::with_pos_color(
-            Vector2f::new((ctrl_canvas_left + 1) as f32, 0.),
+            Vector2f::new((ui.control_surface_left + 1) as f32, 0.),
             Color::rgb(64, 71, 78),
         ),
     ];
 
-    //// starting grid
-    let mut grid = vec![vec![Cell::new(); DEF_GRID.0 as usize]; DEF_GRID.1 as usize];
-
-    while window.is_open() {
-        while let Some(event) = window.poll_event() {
+    while ui.window.is_open() {
+        while let Some(event) = ui.window.poll_event() {
             match event {
-                Event::Closed => window.close(),
+                Event::Closed => ui.window.close(),
                 Event::MouseButtonPressed { button, x, y } => {
-                    let mouse = mouse_to_grid(x, y);
-                    if in_grid(&mouse, &grid_point) {
+                    let mouse = mouse_to_grid(x, y, &game, &ui);
+                    if in_grid(&mouse, &mut game) {
                         // capture grid clicked on
                         click_grid = mouse;
                     }
                 }
                 Event::MouseButtonReleased { button, x, y } => {
-                    let mouse_grid = mouse_to_grid(x, y);
-                    let cell = &mut grid[mouse_grid.x as usize][mouse_grid.y as usize];
+                    let mouse_grid = mouse_to_grid(x, y, &game, &ui);
 
-                    if in_grid(&mouse_grid, &grid_point) {
+                    if in_grid(&mouse_grid, &mut game) {
                         // check release grid vs click grid
                         if click_grid != mouse_grid {
                             continue;
                         }
                         match button {
                             mouse::Button::Left => {
-                                if first_click {
-                                    grid = generate_grid(&mouse_grid);
-                                    first_click = false;
+                                if game.first_click {
+                                    &game.generate_grid(&mouse_grid);
+                                    game.first_click = false;
                                 } else {
+                                    let cell = &mut game.grid[mouse_grid.x as usize]
+                                        [mouse_grid.y as usize];
+
                                     if cell.is_mined {
-                                        grid.iter_mut().for_each(|row| {
+                                        game.grid.iter_mut().for_each(|row| {
                                             row.iter_mut().for_each(|cell| cell.is_open = true)
                                         });
                                     } else if cell.connections > 0 {
                                         cell.is_open = true;
                                     } else if cell.connections == 0 {
-                                        expose_open(&mut grid, &mouse_grid);
+                                        &game.expose_open(&mouse_grid);
                                     }
                                 }
                             }
-                            mouse::Button::Middle => {
-                                first_click = true;
-                                grid = vec![
-                                    vec![Cell::new(); DEF_GRID.0 as usize];
-                                    DEF_GRID.1 as usize
-                                ];
+                            mouse::Button::Middle => game = Game::new(),
+                            mouse::Button::Right => {
+                                if game.first_click {
+                                    continue;
+                                } else {
+                                    let cell = &mut game.grid[mouse_grid.x as usize]
+                                        [mouse_grid.y as usize];
+
+                                    if cell.is_flagged {
+                                        cell.is_flagged = false;
+                                        cell.is_question = true;
+                                    } else if cell.is_question {
+                                        cell.is_flagged = false;
+                                        cell.is_question = false;
+                                    } else {
+                                        cell.is_flagged = true;
+                                        cell.is_question = false;
+                                    }
+                                }
                             }
-                            mouse::Button::Right => {}
                             _ => {}
                         }
                     }
                 }
                 Event::MouseMoved { x, y } => {
                     let loc = Point {
-                        x: ((x - DEF_MARGIN as i32) / DEF_GRID_SQ as i32) as i8,
-                        y: ((y - DEF_MARGIN as i32) / DEF_GRID_SQ as i32) as i8,
+                        x: ((x - ui.margin as i32) / game.grid_square as i32) as i8,
+                        y: ((y - ui.margin as i32) / game.grid_square as i32) as i8,
                     };
-                    if in_grid(&mouse_to_grid(x, y), &grid_point) {
+                    let mouse_loc = &mouse_to_grid(x, y, &game, &ui);
+                    if in_grid(mouse_loc, &mut game) {
                         let mut loc_s = "";
-                        if grid[loc.x as usize][loc.y as usize].is_mined {
+                        if game.grid[mouse_loc.x as usize][mouse_loc.y as usize].is_mined {
                             loc_s = "X";
                         }
                         my_text.set_string(format!("{},{} : {}", loc.x, loc.y, loc_s).as_str());
                         my_text.set_position((
-                            (ctrl_canvas_left + DEF_MARGIN) as f32,
-                            DEF_MARGIN as f32,
+                            (ui.control_surface_left + ui.margin as u32) as f32,
+                            ui.margin as f32,
                         ));
                     } else {
                         my_text.set_string("");
@@ -183,24 +251,25 @@ fn main() {
             }
         }
 
-        window.set_active(true);
+        ui.window.set_active(true);
         // background color of window
-        window.clear(&Color::rgb(1, 6, 9));
+        ui.window.clear(&Color::rgb(1, 6, 9));
         // rectangle playfield
-        window.draw_rectangle_shape(&my_rect, RenderStates::default());
+        ui.window
+            .draw_rectangle_shape(&my_rect, RenderStates::default());
         // line blocking off controls area
-        window.draw_line(&ctrl_canvas_edge);
-        window.draw_text(&my_text, RenderStates::default());
+        ui.window.draw_line(&ctrl_canvas_edge);
+        ui.window.draw_text(&my_text, RenderStates::default());
         // draw grid
-        window.draw_grid(&grid);
+        ui.window.draw_grid(&mut game, &ui);
         // draw all the things
-        window.display();
+        ui.window.display();
     }
 }
 
 trait BareDraw {
     fn draw_line(&self, vertices: &[Vertex]);
-    fn draw_grid(&self, grid: &Vec<Vec<Cell>>);
+    fn draw_grid(&self, game: &mut Game, ui: &UI);
 }
 
 impl BareDraw for RenderWindow {
@@ -208,20 +277,24 @@ impl BareDraw for RenderWindow {
         self.draw_primitives(&vertices, PrimitiveType::LineStrip, RenderStates::default());
     }
 
-    fn draw_grid(&self, grid: &Vec<Vec<Cell>>) {
+    // fn draw_ui(&self) {}
+
+    fn draw_grid(&self, game: &mut Game, ui: &UI) {
+        let grid = &mut game.grid;
+
         let font = Font::from_file("courbd.ttf").unwrap();
-        let mut text = Text::new("", &font, DEF_FONT_SIZE);
+        let mut text = Text::new("", &font, ui.font_size);
         text.set_fill_color(&Color::WHITE);
 
-        for i in 0..DEF_GRID.0 {
-            for j in 0..DEF_GRID.1 {
-                let x = (i * DEF_GRID_SQ) + DEF_MARGIN + 1;
-                let y = (j * DEF_GRID_SQ) + DEF_MARGIN;
-                let w = &x + (DEF_GRID_SQ - 1);
-                let h = &y + (DEF_GRID_SQ - 1);
+        for i in 0..game.grid_width {
+            for j in 0..game.grid_height {
+                let x = (i * game.grid_square) + ui.margin + 1;
+                let y = (j * game.grid_square) + ui.margin;
+                let w = &x + (game.grid_square - 1);
+                let h = &y + (game.grid_square - 1);
 
                 let mut my_rect = RectangleShape::with_size(
-                    ((DEF_GRID_SQ - 1) as f32, (DEF_GRID_SQ - 1) as f32).into(),
+                    ((game.grid_square - 1) as f32, (game.grid_square - 1) as f32).into(),
                 );
                 my_rect.set_position(((x - 1) as f32, y as f32));
                 my_rect.set_fill_color(&Color::rgb(15, 20, 24));
@@ -272,8 +345,8 @@ impl BareDraw for RenderWindow {
                     }
 
                     if !text.string().is_empty() {
-                        let x = (i * DEF_GRID_SQ) + (DEF_GRID_SQ / 2);
-                        let y = (j * DEF_GRID_SQ) + (DEF_GRID_SQ / 2 / 2);
+                        let x = (i * game.grid_square) + (game.grid_square / 2);
+                        let y = (j * game.grid_square) + (game.grid_square / 2 / 2);
                         text.set_position((x as f32, y as f32));
                         self.draw_text(&text, RenderStates::default());
                     }
@@ -285,20 +358,24 @@ impl BareDraw for RenderWindow {
     }
 }
 
-fn in_grid(point: &Point, grid: &Point) -> bool {
-    if point.x < 0 || point.y < 0 || point.x >= grid.x || point.y >= grid.y {
+fn in_grid(point: &Point, game: &mut Game) -> bool {
+    if point.x < 0
+        || point.y < 0
+        || point.x >= game.grid_width as i8
+        || point.y >= game.grid_height as i8
+    {
         return false;
     }
     true
 }
 
-fn mouse_to_grid(mut x: i32, mut y: i32) -> Point {
-    if x < DEF_MARGIN as i32 || y < DEF_MARGIN as i32 {
+fn mouse_to_grid(mut x: i32, mut y: i32, game: &Game, ui: &UI) -> Point {
+    if x < ui.margin as i32 || y < ui.margin as i32 {
         x = -1;
         y = -1;
     } else {
-        x = (x - DEF_MARGIN as i32) / DEF_GRID_SQ as i32;
-        y = (y - DEF_MARGIN as i32) / DEF_GRID_SQ as i32;
+        x = (x - ui.margin as i32) / game.grid_square as i32;
+        y = (y - ui.margin as i32) / game.grid_square as i32;
     }
     Point {
         x: x as i8,
@@ -306,99 +383,95 @@ fn mouse_to_grid(mut x: i32, mut y: i32) -> Point {
     }
 }
 
-fn generate_grid(start: &Point) -> Vec<Vec<Cell>> {
-    let mine_count = (DEF_GRID.0 * DEF_GRID.1) / 10;
+impl Game {
+    fn generate_grid(&mut self, start: &Point) {
+        let mine_count = (self.grid_width * self.grid_height) / 10;
 
-    let (grid_w, grid_h) = (DEF_GRID.0 as usize, DEF_GRID.1 as usize);
+        let (grid_w, grid_h) = (self.grid_width as usize, self.grid_height as usize);
 
-    let mut rng = thread_rng();
+        let mut rng = thread_rng();
 
-    ////todo: make sure we aren't duplicating boards in memory
-    let mut grid: Vec<Vec<Cell>> = vec![vec![Cell::new(); grid_w]; grid_h];
+        ////todo: make sure we aren't duplicating boards in memory
+        self.grid = vec![vec![Cell::new(); grid_w]; grid_h];
 
-    for _ in 0..mine_count {
-        let (mut x, mut y) = (rng.gen_range(0, grid_w), rng.gen_range(0, grid_h));
+        for _ in 0..mine_count {
+            let (mut x, mut y) = (rng.gen_range(0, grid_w), rng.gen_range(0, grid_h));
 
-        while grid[x][y].is_mined || (x == start.x as usize && y == start.y as usize) {
-            x = rng.gen_range(0, grid_w);
-            y = rng.gen_range(0, grid_h);
-        }
+            while self.grid[x][y].is_mined || (x == start.x as usize && y == start.y as usize) {
+                x = rng.gen_range(0, grid_w);
+                y = rng.gen_range(0, grid_h);
+            }
 
-        place_mine(
-            &mut grid,
-            &Point {
+            self.place_mine(&Point {
                 x: x as i8,
                 y: y as i8,
-            },
-        );
-    }
-
-    // expose our starting grid
-    if grid[start.x as usize][start.y as usize].connections == 0 {
-        expose_open(&mut grid, &start);
-    } else {
-        grid[start.x as usize][start.y as usize].is_open = true;
-    }
-
-    grid
-}
-
-fn expose_open(mut grid: &mut Vec<Vec<Cell>>, pos: &Point) {
-    grid[pos.x as usize][pos.y as usize].is_open = true;
-
-    for (i, neighbor) in neighbors.iter().enumerate() {
-        if i >= 4 {
-            break;
+            });
         }
 
-        let location = Point {
-            x: pos.x + neighbor.x,
-            y: pos.y + neighbor.y,
-        };
+        // expose our starting grid
+        if self.grid[start.x as usize][start.y as usize].connections == 0 {
+            self.expose_open(&start);
+        } else {
+            self.grid[start.x as usize][start.y as usize].is_open = true;
+        }
+    }
 
-        let grid_size = Point {
-            x: DEF_GRID.0 as i8,
-            y: DEF_GRID.1 as i8,
-        };
+    fn expose_open(&mut self, pos: &Point) {
+        self.grid[pos.x as usize][pos.y as usize].is_open = true;
 
-        if in_grid(&location, &grid_size) {
-            if grid[location.x as usize][location.y as usize].connections == 0
-                && !grid[location.x as usize][location.y as usize].is_open
-            {
-                expose_open(&mut grid, &location);
+        for (i, neighbor) in neighbors.iter().enumerate() {
+            if i >= 4 {
+                break;
+            }
+
+            let location = Point {
+                x: pos.x + neighbor.x,
+                y: pos.y + neighbor.y,
+            };
+
+            let grid_size = Point {
+                x: self.grid_width as i8,
+                y: self.grid_height as i8,
+            };
+
+            if in_grid(&location, self) {
+                if self.grid[location.x as usize][location.y as usize].connections == 0
+                    && !self.grid[location.x as usize][location.y as usize].is_open
+                {
+                    self.expose_open(&location);
+                }
             }
         }
     }
-}
 
-fn place_mine(mut grid: &mut Vec<Vec<Cell>>, place_grid: &Point) {
-    let (x, y) = (place_grid.x as usize, place_grid.y as usize);
+    fn place_mine(&mut self, place_grid: &Point) {
+        let (x, y) = (place_grid.x as usize, place_grid.y as usize);
 
-    // if !grid[x][y].is_mined {
-    grid[x][y].is_mined = true;
-    //todo: lose it?
-    grid[x][y].position = Point {
-        x: x as i8,
-        y: y as i8,
-    };
-
-    for neighbor in neighbors {
-        let location = Point {
-            x: place_grid.x as i8 + neighbor.x,
-            y: place_grid.y as i8 + neighbor.y,
+        // if !grid[x][y].is_mined {
+        self.grid[x][y].is_mined = true;
+        //todo: lose it?
+        self.grid[x][y].position = Point {
+            x: x as i8,
+            y: y as i8,
         };
 
-        let grid_size = Point {
-            x: DEF_GRID.0 as i8,
-            y: DEF_GRID.1 as i8,
-        };
-        if in_grid(&location, &grid_size) {
-            grid[location.x as usize][location.y as usize].connections += 1;
+        for neighbor in neighbors {
+            let location = Point {
+                x: place_grid.x as i8 + neighbor.x,
+                y: place_grid.y as i8 + neighbor.y,
+            };
+
+            let grid_size = Point {
+                x: self.grid_width as i8,
+                y: self.grid_height as i8,
+            };
+            if in_grid(&location, self) {
+                self.grid[location.x as usize][location.y as usize].connections += 1;
+            }
         }
+        // }
     }
-    // }
 }
-
 //// DEBUG PURPOSES
 // fn expose_grid(win: &RenderWindow, grid: &Vec<Vec<Cell>>) {
 //     let font = Font::from_file("courbd.ttf").unwrap();
