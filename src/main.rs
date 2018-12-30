@@ -6,8 +6,6 @@ use sfml::graphics::{
 use sfml::system::Vector2f;
 use sfml::window::{mouse, Event, Style};
 
-const DEF_CTRL_CANVAS: u32 = 128; // pixels on edge of x for buttons and stuff
-
 const NEIGHBORS: &[Point] = &[
     Point { x: -1, y: 0 },
     Point { x: 1, y: 0 },
@@ -120,11 +118,6 @@ fn main() {
 
     //// UI related something or other
     let mut click_grid = Point { x: -1, y: -1 };
-
-    let grid_point = Point {
-        x: game.grid_square as i8,
-        y: game.grid_square as i8,
-    };
 
     //// UI Font
     let mut my_text = Text::new("", &ui.font, ui.font_size / 2);
@@ -371,8 +364,6 @@ impl BareDraw for RenderWindow {
                 }
             }
         }
-
-        // expose_grid(&self, &grid);
     }
 }
 
@@ -438,9 +429,6 @@ impl Game {
         self.grid[pos.x as usize][pos.y as usize].is_open = true;
 
         for (i, neighbor) in NEIGHBORS.iter().enumerate() {
-            // if i >= 4 {
-            //     break;
-            // }
 
             let location = Point {
                 x: pos.x + neighbor.x,
@@ -534,37 +522,3 @@ impl Game {
         true
     }
 }
-//// DEBUG PURPOSES
-// fn expose_grid(win: &RenderWindow, grid: &Vec<Vec<Cell>>) {
-//     let font = Font::from_file("courbd.ttf").unwrap();
-//     let mut text = Text::new("", &font, DEF_FONT_SIZE);
-//     text.set_fill_color(&Color::WHITE);
-
-//     for (i, row) in grid.iter().enumerate() {
-//         for (j, cell) in row.iter().enumerate() {
-//             text.set_fill_color(&Color::WHITE);
-
-//             // let x = (i * DEF_GRID_SQ as usize) + (DEF_GRID_SQ as usize / 2)
-//             //     - (DEF_FONT_SIZE / 2) as usize
-//             //     + (DEF_MARGIN / 2) as usize;
-//             // let y = (j * DEF_GRID_SQ as usize)
-//             //     + ((DEF_GRID_SQ as usize / 2) + (DEF_MARGIN / 2) as usize);
-//             let x = (i * DEF_GRID_SQ as usize) + (DEF_GRID_SQ / 2) as usize;
-//             let y = (j * DEF_GRID_SQ as usize) + (DEF_GRID_SQ / 2 / 2) as usize;
-
-//             if cell.is_mined {
-//                 text.set_string("X");
-//                 text.set_fill_color(&Color::RED);
-//             } else if cell.connections > 0u8 {
-//                 text.set_string(cell.connections.to_string().as_str());
-//             } else {
-//                 text.set_string("");
-//             }
-
-//             if !text.string().is_empty() {
-//                 text.set_position((x as f32, y as f32));
-//                 win.draw_text(&text, RenderStates::default());
-//             }
-//         }
-//     }
-// }
