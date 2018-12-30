@@ -8,7 +8,7 @@ use sfml::window::{mouse, Event, Style};
 
 const DEF_CTRL_CANVAS: u32 = 128; // pixels on edge of x for buttons and stuff
 
-const neighbors: &[Point] = &[
+const NEIGHBORS: &[Point] = &[
     Point { x: -1, y: 0 },
     Point { x: 1, y: 0 },
     Point { x: 0, y: -1 },
@@ -89,7 +89,7 @@ struct UI {
 impl UI {
     fn new(game: &Game) -> UI {
         let margin = 8;
-        let font_size = (game.grid_square / 2) as u32;
+        let font_size = (game.grid_square as f32 / 1.5) as u32;
         let control_surface_width = 128;
         let ui_width =
             (game.grid_square * game.grid_width + (margin * 2) + control_surface_width) as u32;
@@ -183,24 +183,28 @@ fn main() {
                         if click_grid != mouse_grid {
                             continue;
                         }
+                        let cell = &mut game.grid[mouse_grid.x as usize][mouse_grid.y as usize];
                         match button {
                             mouse::Button::Left => {
                                 if game.first_click {
                                     &game.generate_grid(&mouse_grid);
                                     game.first_click = false;
-                                } else {
-                                    let cell = &mut game.grid[mouse_grid.x as usize]
-                                        [mouse_grid.y as usize];
-
-                                    if cell.is_mined {
-                                        game.grid.iter_mut().for_each(|row| {
-                                            row.iter_mut().for_each(|cell| cell.is_open = true)
-                                        });
-                                    } else if cell.connections > 0 {
-                                        cell.is_open = true;
-                                    } else if cell.connections == 0 {
-                                        &game.expose_open(&mouse_grid);
+                                } else if cell.is_flagged {
+                                    continue;
+                                } else if cell.is_mined {
+                                    game.lose_game();
+                                } else if cell.connections > 0 {
+                                    if cell.is_open {
+                                        &game.expose_neighbors(&mouse_grid);
+                                    } else {
+                                        if cell.is_flagged || cell.is_question {
+                                            cell.is_open = false;
+                                        } else {
+                                            cell.is_open = true;
+                                        }
                                     }
+                                } else if cell.connections == 0 {
+                                    &game.expose_open(&mouse_grid);
                                 }
                             }
                             mouse::Button::Middle => game = Game::new(),
@@ -208,9 +212,6 @@ fn main() {
                                 if game.first_click {
                                     continue;
                                 } else {
-                                    let cell = &mut game.grid[mouse_grid.x as usize]
-                                        [mouse_grid.y as usize];
-
                                     if cell.is_flagged {
                                         cell.is_flagged = false;
                                         cell.is_question = true;
@@ -284,7 +285,8 @@ impl BareDraw for RenderWindow {
 
         let font = Font::from_file("courbd.ttf").unwrap();
         let mut text = Text::new("", &font, ui.font_size);
-        text.set_fill_color(&Color::WHITE);
+        text.set_outline_thickness(1.);
+        text.set_outline_color(&Color::BLACK);
 
         for i in 0..game.grid_width {
             for j in 0..game.grid_height {
@@ -292,6 +294,12 @@ impl BareDraw for RenderWindow {
                 let y = (j * game.grid_square) + ui.margin;
                 let w = &x + (game.grid_square - 1);
                 let h = &y + (game.grid_square - 1);
+
+                if game.game_over {
+                    text.set_fill_color(&Color::RED);
+                } else {
+                    text.set_fill_color(&Color::WHITE);
+                }
 
                 let mut my_rect = RectangleShape::with_size(
                     ((game.grid_square - 1) as f32, (game.grid_square - 1) as f32).into(),
@@ -330,10 +338,10 @@ impl BareDraw for RenderWindow {
 
                 self.draw_line(&bot_right);
                 self.draw_line(&top_left);
-                if grid[i as usize][j as usize].is_open {
-                    self.draw_rectangle_shape(&my_rect, RenderStates::default());
 
-                    let cell = &grid[i as usize][j as usize];
+                let cell = &grid[i as usize][j as usize];
+                if cell.is_open {
+                    self.draw_rectangle_shape(&my_rect, RenderStates::default());
 
                     if cell.is_mined {
                         text.set_string("X");
@@ -343,13 +351,23 @@ impl BareDraw for RenderWindow {
                     } else {
                         text.set_string("");
                     }
-
-                    if !text.string().is_empty() {
-                        let x = (i * game.grid_square) + (game.grid_square / 2);
-                        let y = (j * game.grid_square) + (game.grid_square / 2 / 2);
-                        text.set_position((x as f32, y as f32));
-                        self.draw_text(&text, RenderStates::default());
+                } else {
+                    if cell.is_flagged {
+                        text.set_string("F");
+                        text.set_fill_color(&Color::BLUE);
+                    } else if cell.is_question {
+                        text.set_string("?");
+                        text.set_fill_color(&Color::BLACK);
+                    } else {
+                        text.set_string("");
                     }
+                }
+
+                if !text.string().is_empty() {
+                    let x = (i * game.grid_square) + (ui.font_size as usize / 2) + ui.margin;
+                    let y = (j * game.grid_square) + (ui.font_size as usize / 2 / 2);
+                    text.set_position((x as f32, y as f32));
+                    self.draw_text(&text, RenderStates::default());
                 }
             }
         }
@@ -419,10 +437,10 @@ impl Game {
     fn expose_open(&mut self, pos: &Point) {
         self.grid[pos.x as usize][pos.y as usize].is_open = true;
 
-        for (i, neighbor) in neighbors.iter().enumerate() {
-            if i >= 4 {
-                break;
-            }
+        for (i, neighbor) in NEIGHBORS.iter().enumerate() {
+            // if i >= 4 {
+            //     break;
+            // }
 
             let location = Point {
                 x: pos.x + neighbor.x,
@@ -435,13 +453,46 @@ impl Game {
             };
 
             if in_grid(&location, self) {
-                if self.grid[location.x as usize][location.y as usize].connections == 0
-                    && !self.grid[location.x as usize][location.y as usize].is_open
-                {
+                let cell = &mut self.grid[location.x as usize][location.y as usize];
+
+                if cell.connections == 0 && !cell.is_open {
+                    self.expose_open(&location);
+                } else if cell.connections > 0 && !cell.is_flagged && !cell.is_question {
+                    cell.is_open = true;
+                }
+            }
+        }
+    }
+//TODO: FIXME: See if we can merge expose_neighbors && expose_open
+    fn expose_neighbors(&mut self, pos: &Point) {
+        for neighbor in NEIGHBORS.iter() {
+            let location = Point {
+                x: pos.x + neighbor.x,
+                y: pos.y + neighbor.y,
+            };
+
+            if self.in_grid(&location) {
+                let cell = self.grid[location.x as usize][location.y as usize].clone();
+
+                if cell.is_flagged || cell.is_question {
+                    self.grid[location.x as usize][location.y as usize].is_open = false;
+                } else if !cell.is_flagged && !cell.is_question && !cell.is_mined {
+                    self.grid[location.x as usize][location.y as usize].is_open = true;
+                } else if cell.is_mined && !cell.is_flagged && !cell.is_question {
+                    self.lose_game();
+                } else if cell.connections == 0 {
                     self.expose_open(&location);
                 }
             }
         }
+    }
+
+    fn lose_game(&mut self) {
+        self.grid
+            .iter_mut()
+            .for_each(|row| row.iter_mut().for_each(|cell| cell.is_open = true));
+
+        self.game_over = true;
     }
 
     fn place_mine(&mut self, place_grid: &Point) {
@@ -455,7 +506,7 @@ impl Game {
             y: y as i8,
         };
 
-        for neighbor in neighbors {
+        for neighbor in NEIGHBORS {
             let location = Point {
                 x: place_grid.x as i8 + neighbor.x,
                 y: place_grid.y as i8 + neighbor.y,
@@ -470,6 +521,17 @@ impl Game {
             }
         }
         // }
+    }
+
+    fn in_grid(&self, point: &Point) -> bool {
+        if point.x < 0
+            || point.y < 0
+            || point.x >= self.grid_width as i8
+            || point.y >= self.grid_height as i8
+        {
+            return false;
+        }
+        true
     }
 }
 //// DEBUG PURPOSES
