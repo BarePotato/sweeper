@@ -3,7 +3,7 @@ use sfml::graphics::{
     Text, Transformable, Vertex,
 };
 use sfml::system::Vector2f;
-use sfml::window::{mouse, Event, Style};
+use sfml::window::Style;
 
 use super::Game;
 
@@ -17,12 +17,11 @@ pub struct UI {
 }
 
 impl UI {
-    pub fn new(grid_width:usize, grid_height:usize, grid_square:usize) -> UI {
+    pub fn new(grid_width: usize, grid_height: usize, grid_square: usize) -> UI {
         let margin = 8;
         let font_size = (grid_square as f32 / 1.5) as u32;
         let control_surface_width = 128;
-        let ui_width =
-            (grid_square * grid_width + (margin * 2) + control_surface_width) as u32;
+        let ui_width = (grid_square * grid_width + (margin * 2) + control_surface_width) as u32;
         let ui_height = (grid_square * grid_height + (margin * 2)) as u32;
         let control_surface_left = ui_width - control_surface_width as u32;
 
@@ -146,4 +145,52 @@ impl BareDraw for RenderWindow {
             }
         }
     }
+}
+
+pub trait BareColor {
+    const DARK_BLUE: Self;
+    const DARK_RED: Self;
+    const DARK_GREEN: Self;
+    const CYAN: Self;
+    const DARK_CYAN: Self;
+    const GRAY: Self;
+}
+
+impl BareColor for Color {
+    const DARK_BLUE: Self = Self {
+        r: 0,
+        g: 0,
+        b: 128,
+        a: 255,
+    };
+    const DARK_RED: Self = Self {
+        r: 128,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+    const DARK_GREEN: Self = Self {
+        r: 0,
+        g: 128,
+        b: 0,
+        a: 255,
+    };
+    const CYAN: Self = Self {
+        r: 0,
+        g: 255,
+        b: 255,
+        a: 255,
+    };
+    const DARK_CYAN: Self = Self {
+        r: 0,
+        g: 128,
+        b: 128,
+        a: 255,
+    };
+    const GRAY: Self = Self {
+        r: 128,
+        g: 128,
+        b: 128,
+        a: 255,
+    };
 }

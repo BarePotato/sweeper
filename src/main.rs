@@ -82,22 +82,8 @@ fn main() {
                                 if game.first_click {
                                     &game.generate_grid(&mouse_grid);
                                     game.first_click = false;
-                                } else if cell.is_flagged {
-                                    continue;
-                                } else if cell.is_mined {
-                                    game.lose_game();
-                                } else if cell.connections > 0 {
-                                    if cell.is_open {
-                                        &game.expose_neighbors(&mouse_grid);
-                                    } else {
-                                        if cell.is_flagged || cell.is_question {
-                                            cell.is_open = false;
-                                        } else {
-                                            cell.is_open = true;
-                                        }
-                                    }
-                                } else if cell.connections == 0 {
-                                    &game.expose_open(&mouse_grid);
+                                } else {
+                                    &game.expose(&mouse_grid);
                                 }
                             }
                             mouse::Button::Middle => game = Game::new(),
@@ -105,16 +91,7 @@ fn main() {
                                 if game.first_click {
                                     continue;
                                 } else {
-                                    if cell.is_flagged {
-                                        cell.is_flagged = false;
-                                        cell.is_question = true;
-                                    } else if cell.is_question {
-                                        cell.is_flagged = false;
-                                        cell.is_question = false;
-                                    } else {
-                                        cell.is_flagged = true;
-                                        cell.is_question = false;
-                                    }
+                                    cell.rotate_marker();
                                 }
                             }
                             _ => {}
