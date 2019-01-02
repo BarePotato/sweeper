@@ -75,7 +75,7 @@ impl Game {
             grid: vec![vec![Cell::new(); grid_width]; grid_height],
             grid_width,
             grid_height,
-            mine_percent: 15,
+            mine_percent: 30,
             grid_square,
             first_click: true,
             game_over: false,

@@ -54,8 +54,6 @@ impl BareDraw for RenderWindow {
     // fn draw_ui(&self) {}
 
     fn draw_grid(&self, game: &mut Game, ui: &UI) {
-        let grid = &mut game.grid;
-
         let font = Font::from_file("courbd.ttf").unwrap();
         let mut text = Text::new("", &font, ui.font_size);
         text.set_outline_thickness(1.);
@@ -112,7 +110,7 @@ impl BareDraw for RenderWindow {
                 self.draw_line(&bot_right);
                 self.draw_line(&top_left);
 
-                let cell = &grid[i as usize][j as usize];
+                let cell = &game.grid[i as usize][j as usize];
                 if cell.is_open {
                     self.draw_rectangle_shape(&my_rect, RenderStates::default());
 
@@ -121,6 +119,18 @@ impl BareDraw for RenderWindow {
                         text.set_fill_color(&Color::RED);
                     } else if cell.connections > 0u8 {
                         text.set_string(cell.connections.to_string().as_str());
+
+                        match cell.connections {
+                            1 => text.set_fill_color(&BareColor::BLUE),
+                            2 => text.set_fill_color(&BareColor::DARK_GREEN),
+                            3 => text.set_fill_color(&BareColor::RED),
+                            4 => text.set_fill_color(&BareColor::DARK_BLUE),
+                            5 => text.set_fill_color(&BareColor::DARK_RED),
+                            6 => text.set_fill_color(&BareColor::DARK_CYAN),
+                            7 => text.set_fill_color(&Color::BLACK),
+                            8 => text.set_fill_color(&BareColor::GRAY),
+                            _ => text.set_fill_color(&Color::WHITE),
+                        }
                     } else {
                         text.set_string("");
                     }
@@ -148,20 +158,35 @@ impl BareDraw for RenderWindow {
 }
 
 pub trait BareColor {
+    const BLUE: Self;
     const DARK_BLUE: Self;
+    const RED: Self;
     const DARK_RED: Self;
     const DARK_GREEN: Self;
     const CYAN: Self;
     const DARK_CYAN: Self;
     const GRAY: Self;
+    const DARK_GRAY: Self;
 }
 
 impl BareColor for Color {
+    const BLUE: Self = Self {
+        r: 0,
+        g: 0,
+        b: 255,
+        a: 192,
+    };
     const DARK_BLUE: Self = Self {
         r: 0,
         g: 0,
         b: 128,
         a: 255,
+    };
+    const RED: Self = Self {
+        r: 255,
+        g: 0,
+        b: 0,
+        a: 192,
     };
     const DARK_RED: Self = Self {
         r: 128,
@@ -191,6 +216,12 @@ impl BareColor for Color {
         r: 128,
         g: 128,
         b: 128,
+        a: 255,
+    };
+    const DARK_GRAY: Self = Self {
+        r: 64,
+        g: 64,
+        b: 64,
         a: 255,
     };
 }
