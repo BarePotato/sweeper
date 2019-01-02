@@ -2,9 +2,8 @@ needs refactor
 
 needs win game checker
 
-merger expose functions
-
 add some buttons for new game, grid size, and % mines
+going to implement a control system just for the luls of it
 
 make it prettier
 flag/potato graphics/etc
