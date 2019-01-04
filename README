@@ -1,13 +1,18 @@
-needs refactor
+To build this you will need the SFML and CSFML libs from:
+https://www.sfml-dev.org/download.php
+https://www.sfml-dev.org/download/csfml/
 
-needs win game checker
-
-merger expose functions
-
-add some buttons for new game, grid size, and % mines
-
-make it prettier
-flag/potato graphics/etc
+You can check the following link for instructions on where to put things:
+https://github.com/jeremyletang/rust-sfml/wiki
 
 
-Game is otherwise working and playable
+
+    # Game is fully playable less an obvious you win function
+
+#TODO:
+General refactor to clean things up since this wasn't initially meant to be a full featured app.
+
+Working on implementing some re-usable controls for the UI, that may be the start point
+    for a controls lib on top of the SFML Rust bindings. Buttons, Menu, Gameboard.
+
+Cooler graphics and color scheme.
